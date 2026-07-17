@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dual N-Back</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0A0D14;
+    --bg-elev: #131826;
+    --cell: #1B2233;
+    --cell-active: #3E7BFA;
+    --text: #E8ECF4;
+    --text-dim: #6C7690;
+    --green: #2FD98A;
+    --amber: #F5B93E;
+    --ring: rgba(62,123,250,0.18);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: radial-gradient(ellipse at 50% -10%, #131A2C 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow:hidden;
+  }
+  .num{ font-family:'Space Grotesk', sans-serif; }
+  #app{
+    height:100vh; height:100dvh; width:100vw;
+    max-width:520px; margin:0 auto;
+    display:flex; flex-direction:column;
+    padding: env(safe-area-inset-top) 18px env(safe-area-inset-bottom) 18px;
+    position:relative;
+  }
+  .screen{ display:none; flex-direction:column; height:100%; }
+  .screen.active{ display:flex; }
+
+  /* ---------- Setup ---------- */
+  #screen-setup{ justify-content:center; gap:38px; }
+  .brand{ text-align:center; }
+  .brand .mark{
+    width:44px; height:44px; margin:0 auto 14px;
+    display:grid; grid-template-columns:repeat(3,1fr); gap:3px;
+  }
+  .brand .mark span{ background:var(--cell); border-radius:3px; }
+  .brand .mark span:nth-child(5){ background:var(--cell-active); }
+  .brand h1{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:26px; margin:0; letter-spacing:-0.02em; }
+  .brand p{ color:var(--text-dim); font-size:14px; margin:8px 0 0; line-height:1.5; }
+
+  .setting-block{ }
+  .setting-label{
+    font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim);
+    margin-bottom:12px; font-weight:500;
+  }
+  .stepper{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--bg-elev); border-radius:16px; padding:10px 10px;
+  }
+  .stepper button{
+    width:46px; height:46px; border-radius:12px; border:none;
+    background:var(--cell); color:var(--text); font-size:20px; font-weight:600;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .stepper button:active{ background:var(--cell-active); }
+  .stepper .value{ font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:600; }
+  .stepper .value .sub{ color:var(--text-dim); font-size:13px; font-weight:400; margin-left:6px; }
+
+  .start-btn{
+    border:none; border-radius:18px; padding:18px;
+    background: linear-gradient(180deg, var(--cell-active), #2F63D6);
+    color:#fff; font-size:17px; font-weight:600; font-family:'Space Grotesk',sans-serif;
+    box-shadow: 0 8px 24px -8px rgba(62,123,250,0.55);
+  }
+  .start-btn:active{ transform: scale(0.98); }
+
+  /* ---------- Game ---------- */
+  #screen-game{ justify-content:space-between; padding-top:10px; }
+  .game-top{ display:flex; align-items:center; justify-content:space-between; }
+  .level-chip{
+    background:var(--bg-elev); color:var(--text-dim); font-size:13px;
+    padding:7px 12px; border-radius:100px; font-weight:500;
+  }
+  .level-chip b{ color:var(--text); font-weight:600; }
+  .timer{ font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .progress-track{
+    height:3px; background:var(--bg-elev); border-radius:2px; margin-top:14px; overflow:hidden;
+  }
+  .progress-fill{ height:100%; background:var(--cell-active); width:0%; transition: width 0.2s linear; }
+
+  .grid{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
+    width:100%; aspect-ratio:1/1; align-self:center; margin:auto 0;
+  }
+  .cell{
+    background:var(--cell); border-radius:16px;
+    transition: background-color 0.35s ease, box-shadow 0.35s ease;
+  }
+  .cell.on{
+    background: var(--cell-active);
+    box-shadow: 0 0 0 6px var(--ring);
+  }
+
+  .controls{ display:flex; gap:12px; margin-top:auto; }
+  .ctrl-btn{
+    flex:1; border:none; border-radius:18px; padding:20px 8px;
+    background:var(--bg-elev); color:var(--text);
+    font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:600;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    transition: background-color 0.18s ease;
+  }
+  .ctrl-btn .icon{ font-size:20px; }
+  .ctrl-btn.hit{ background:var(--green); color:#06331E; }
+  .ctrl-btn.miss{ background:var(--amber); color:#3A2900; }
+  .ctrl-btn:active{ filter:brightness(1.08); }
+
+  /* ---------- Results ---------- */
+  #screen-results{ justify-content:center; gap:28px; }
+  .res-title{ font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:600; text-align:center; }
+  .res-hero{
+    text-align:center; background:var(--bg-elev); border-radius:22px; padding:28px 20px;
+  }
+  .res-hero .pct{ font-family:'Space Grotesk',sans-serif; font-size:52px; font-weight:700; color:var(--cell-active); }
+  .res-hero .lbl{ color:var(--text-dim); font-size:13px; margin-top:6px; }
+  .res-row{
+    display:flex; gap:12px;
+  }
+  .res-card{
+    flex:1; background:var(--bg-elev); border-radius:16px; padding:16px;
+  }
+  .res-card .pct{ font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:600; }
+  .res-card .lbl{ color:var(--text-dim); font-size:12px; margin-top:4px; }
+  .res-card .detail{ color:var(--text-dim); font-size:11px; margin-top:8px; line-height:1.5; }
+  .again-btn{
+    border:none; border-radius:18px; padding:17px;
+    background:var(--cell); color:var(--text);
+    font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:600;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SETUP -->
+  <div class="screen active" id="screen-setup">
+    <div class="brand">
+      <div class="mark"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <h1>Dual N-Back</h1>
+      <p>Тренировка рабочей памяти.<br>Запоминай позицию и звук одновременно.</p>
+    </div>
+
+    <div class="setting-block">
+      <div class="setting-label">Уровень (N-back)</div>
+      <div class="stepper">
+        <button id="lvl-minus">−</button>
+        <div class="value"><span id="lvl-value" class="num">2</span><span class="sub">назад</span></div>
+        <button id="lvl-plus">+</button>
+      </div>
+    </div>
+
+    <div class="setting-block">
+      <div class="setting-label">Длительность сессии</div>
+      <div class="stepper">
+        <button id="dur-minus">−</button>
+        <div class="value"><span id="dur-value" class="num">8</span><span class="sub">мин</span></div>
+        <button id="dur-plus">+</button>
+      </div>
+    </div>
+
+    <button class="start-btn" id="start-btn">Начать</button>
+  </div>
+
+  <!-- GAME -->
+  <div class="screen" id="screen-game">
+    <div>
+      <div class="game-top">
+        <div class="level-chip"><b id="game-level">2</b>-back</div>
+        <div class="timer num" id="game-timer">08:00</div>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="btn-position"><span class="icon">◧</span>Позиция</button>
+      <button class="ctrl-btn" id="btn-sound"><span class="icon">♪</span>Звук</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="screen" id="screen-results">
+    <div class="res-title">Сессия завершена</div>
+    <div class="res-hero">
+      <div class="pct num" id="res-overall">0%</div>
+      <div class="lbl">общая точность</div>
+    </div>
+    <div class="res-row">
+      <div class="res-card">
+        <div class="pct num" id="res-position">0%</div>
+        <div class="lbl">Позиция</div>
+        <div class="detail" id="res-position-detail"></div>
+      </div>
+      <div class="res-card">
+        <div class="pct num" id="res-sound">0%</div>
+        <div class="lbl">Звук</div>
+        <div class="detail" id="res-sound-detail"></div>
+      </div>
+    </div>
+    <button class="again-btn" id="again-btn">Ещё раз</button>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Config ----------
+  var TRIAL_MS = 2500;
+  var STIM_ON_MS = 1700;
+  var LETTERS = ['K','H','L','B','Q','T','S','F','M'];
+  var MATCH_PROB = 0.40;
+
+  var state = {
+    level: 2,
+    durationMin: 8,
+  };
+
+  // ---------- Setup screen ----------
+  var lvlValue = document.getElementById('lvl-value');
+  var durValue = document.getElementById('dur-value');
+
+  document.getElementById('lvl-minus').onclick = function(){
+    state.level = Math.max(1, state.level - 1);
+    lvlValue.textContent = state.level;
+  };
+  document.getElementById('lvl-plus').onclick = function(){
+    state.level = Math.min(9, state.level + 1);
+    lvlValue.textContent = state.level;
+  };
+  document.getElementById('dur-minus').onclick = function(){
+    state.durationMin = Math.max(1, state.durationMin - 1);
+    durValue.textContent = state.durationMin;
+  };
+  document.getElementById('dur-plus').onclick = function(){
+    state.durationMin = Math.min(15, state.durationMin + 1);
+    durValue.textContent = state.durationMin;
+  };
+  document.getElementById('start-btn').onclick = function(){ startGame(); };
+  document.getElementById('again-btn').onclick = function(){ showScreen('setup'); };
+
+  function showScreen(name){
+    ['setup','game','results'].forEach(function(n){
+      document.getElementById('screen-'+n).classList.toggle('active', n===name);
+    });
+  }
+
+  // ---------- Grid ----------
+  var gridEl = document.getElementById('grid');
+  var cells = [];
+  for (var i=0;i<9;i++){
+    var c = document.createElement('div');
+    c.className = 'cell';
+    gridEl.appendChild(c);
+    cells.push(c);
+  }
+
+  // ---------- Audio feedback (synth tones) ----------
+  var audioCtx = null;
+  function getCtx(){
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+  function playTone(freqs, dur){
+    try{
+      var ctx = getCtx();
+      var t0 = ctx.currentTime;
+      freqs.forEach(function(f, idx){
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        var start = t0 + idx*dur;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.18, start+0.02);
+        gain.gain.linearRampToValueAtTime(0, start+dur);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(start); osc.stop(start+dur);
+      });
+    }catch(e){}
+  }
+  function playGreenSound(){ playTone([660,880], 0.11); }
+  function playYellowSound(){ playTone([340,240], 0.14); }
+
+  // ---------- Speech ----------
+  var voices = [];
+  function loadVoices(){ voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; }
+  if (window.speechSynthesis){
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  function pickFemaleVoice(){
+    var preferredNames = ['female','samantha','victoria','zira','google us english','karen','moira'];
+    for (var i=0;i<voices.length;i++){
+      var v = voices[i];
+      if (!/^en/i.test(v.lang)) continue;
+      var name = v.name.toLowerCase();
+      for (var j=0;j<preferredNames.length;j++){
+        if (name.indexOf(preferredNames[j]) !== -1) return v;
+      }
+    }
+    for (var k=0;k<voices.length;k++){
+      if (/^en/i.test(voices[k].lang)) return voices[k];
+    }
+    return null;
+  }
+  function speakLetter(letter){
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(letter);
+    u.lang = 'en-US';
+    u.rate = 0.95;
+    u.pitch = 1.05;
+    var v = pickFemaleVoice();
+    if (v) u.voice = v;
+    window.speechSynthesis.speak(u);
+  }
+
+  // ---------- Game state ----------
+  var game = null;
+
+  function startGame(){
+    var totalTrials = Math.floor((state.durationMin*60*1000) / TRIAL_MS);
+    var positions = [];
+    var letters = [];
+
+    for (var i=0;i<totalTrials;i++){
+      var pos, let_;
+      if (i < state.level){
+        pos = Math.floor(Math.random()*9);
+        let_ = LETTERS[Math.floor(Math.random()*LETTERS.length)];
+      } else {
+        if (Math.random() < MATCH_PROB){
+          pos = positions[i-state.level];
+        } else {
+          pos = Math.floor(Math.random()*9);
+        }
+        if (Math.random() < MATCH_PROB){
+          let_ = letters[i-state.level];
+        } else {
+          let_ = LETTERS[Math.floor(Math.random()*LETTERS.length)];
+        }
+      }
+      positions.push(pos);
+      letters.push(let_);
+    }
+
+    game = {
+      totalTrials: totalTrials,
+      positions: positions,
+      letters: letters,
+      idx: -1,
+      posPressed: false,
+      soundPressed: false,
+      stats: {
+        posHits:0, posMisses:0, posFA:0, posCR:0,
+        sndHits:0, sndMisses:0, sndFA:0, sndCR:0,
+        evalTrials:0
+      },
+      startedAt: Date.now(),
+      totalMs: state.durationMin*60*1000,
+      trialTimer: null,
+      tickTimer: null,
+      ended: false
+    };
+
+    document.getElementById('game-level').textContent = state.level;
+    document.getElementById('progress-fill').style.width = '0%';
+    resetButtonVisual('position');
+    resetButtonVisual('sound');
+    showScreen('game');
+    nextTrial();
+    game.tickTimer = setInterval(updateClock, 200);
+  }
+
+  function updateClock(){
+    if (!game) return;
+    var elapsed = Date.now() - game.startedAt;
+    var remaining = Math.max(0, game.totalMs - elapsed);
+    var mm = Math.floor(remaining/60000);
+    var ss = Math.floor((remaining%60000)/1000);
+    document.getElementById('game-timer').textContent =
+      (mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+    var pct = Math.min(100, (elapsed/game.totalMs)*100);
+    document.getElementById('progress-fill').style.width = pct+'%';
+  }
+
+  function nextTrial(){
+    if (!game) return;
+
+    // Evaluate previous trial's outcome (if any) before moving on
+    if (game.idx >= 0) evaluateTrial(game.idx);
+
+    game.idx++;
+    if (game.idx >= game.totalTrials){
+      finishGame();
+      return;
+    }
+
+    game.posPressed = false;
+    game.soundPressed = false;
+    setTimeout(function(){
+      resetButtonVisual('position');
+      resetButtonVisual('sound');
+    }, 450);
+
+    var pos = game.positions[game.idx];
+    var letter = game.letters[game.idx];
+
+    cells[pos].classList.add('on');
+    speakLetter(letter);
+
+    setTimeout(function(){
+      cells[pos].classList.remove('on');
+    }, STIM_ON_MS);
+
+    game.trialTimer = setTimeout(nextTrial, TRIAL_MS);
+  }
+
+  function evaluateTrial(i){
+    if (i < state.level) return; // no history yet, nothing to evaluate
+    var st = game.stats;
+    st.evalTrials++;
+
+    var posMatch = game.positions[i] === game.positions[i-state.level];
+    var sndMatch = game.letters[i] === game.letters[i-state.level];
+
+    var posMissed = false, sndMissed = false;
+
+    if (posMatch && game.posPressed) st.posHits++;
+    else if (posMatch && !game.posPressed){ st.posMisses++; posMissed = true; }
+    else if (!posMatch && game.posPressed) st.posFA++;
+    else st.posCR++;
+
+    if (sndMatch && game.soundPressed) st.sndHits++;
+    else if (sndMatch && !game.soundPressed){ st.sndMisses++; sndMissed = true; }
+    else if (!sndMatch && game.soundPressed) st.sndFA++;
+    else st.sndCR++;
+
+    if (posMissed) document.getElementById('btn-position').classList.add('miss');
+    if (sndMissed) document.getElementById('btn-sound').classList.add('miss');
+    if (posMissed || sndMissed) playYellowSound();
+  }
+
+  function resetButtonVisual(which){
+    var el = document.getElementById(which==='position' ? 'btn-position' : 'btn-sound');
+    el.classList.remove('hit','miss');
+  }
+
+  function handlePress(which){
+    if (!game || game.ended) return;
+    if (game.idx < 0 || game.idx >= game.totalTrials) return;
+
+    var isPressed = which === 'position' ? game.posPressed : game.soundPressed;
+    if (isPressed) return; // only first press counts
+
+    if (which === 'position') game.posPressed = true; else game.soundPressed = true;
+
+    var i = game.idx;
+    var isMatch;
+    if (i < state.level){
+      isMatch = false;
+    } else if (which === 'position'){
+      isMatch = game.positions[i] === game.positions[i-state.level];
+    } else {
+      isMatch = game.letters[i] === game.letters[i-state.level];
+    }
+
+    var el = document.getElementById(which==='position' ? 'btn-position' : 'btn-sound');
+    if (isMatch){
+      el.classList.add('hit');
+      playGreenSound();
+    } else {
+      el.classList.add('miss');
+      playYellowSound();
+    }
+  }
+
+  document.getElementById('btn-position').addEventListener('click', function(){ handlePress('position'); });
+  document.getElementById('btn-sound').addEventListener('click', function(){ handlePress('sound'); });
+
+  function finishGame(){
+    game.ended = true;
+    clearTimeout(game.trialTimer);
+    clearInterval(game.tickTimer);
+
+    // flash miss indicator briefly isn't needed post-hoc; just show results
+    var st = game.stats;
+    var posDenom = st.posHits + st.posMisses + st.posFA;
+    var sndDenom = st.sndHits + st.sndMisses + st.sndFA;
+    var posPct = posDenom ? Math.round((st.posHits/posDenom)*100) : 0;
+    var sndPct = sndDenom ? Math.round((st.sndHits/sndDenom)*100) : 0;
+    var overallDenom = posDenom + sndDenom;
+    var overall = overallDenom ? Math.round(((st.posHits+st.sndHits)/overallDenom)*100) : 0;
+
+    document.getElementById('res-overall').textContent = overall+'%';
+    document.getElementById('res-position').textContent = posPct+'%';
+    document.getElementById('res-sound').textContent = sndPct+'%';
+    document.getElementById('res-position-detail').textContent =
+      'Попадания: '+st.posHits+' · Пропуски: '+st.posMisses+' · Ложные: '+st.posFA;
+    document.getElementById('res-sound-detail').textContent =
+      'Попадания: '+st.sndHits+' · Пропуски: '+st.sndMisses+' · Ложные: '+st.sndFA;
+
+    showScreen('results');
+  }
+
+})();
+</script>
+</body>
+</html>
